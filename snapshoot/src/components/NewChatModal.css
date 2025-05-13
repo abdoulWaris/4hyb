@@ -1,0 +1,120 @@
+.new-chat-content {
+  --background: var(--beunreal-surface);
+}
+
+.search-container {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--beunreal-border);
+}
+
+.user-list {
+  background-color: var(--beunreal-surface);
+}
+
+.user-item {
+  --background: var(--beunreal-surface);
+  --background-hover: var(--beunreal-background);
+  --border-color: var(--beunreal-border);
+  --padding-start: 16px;
+  --padding-end: 16px;
+  --inner-padding-end: 0;
+}
+
+.user-item.selected {
+  --background: rgba(var(--ion-color-primary-rgb), 0.08);
+}
+
+.user-item ion-label h2 {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--beunreal-text);
+  margin-bottom: 4px;
+}
+
+.user-item ion-label p {
+  font-size: 13px;
+  color: var(--beunreal-text-secondary);
+}
+
+.selected-icon {
+  color: var(--ion-color-primary);
+  font-size: 20px;
+}
+
+.default-avatar {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--beunreal-primary);
+  color: var(--beunreal-surface);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.center-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.center-content ion-spinner {
+  margin-bottom: 16px;
+}
+
+.group-options {
+  padding: 16px;
+  border-bottom: 1px solid var(--beunreal-border);
+  margin-bottom: 8px;
+}
+
+.group-name-input {
+  --background: transparent;
+  --border-color: var(--beunreal-border);
+  --highlight-color-focused: var(--ion-color-primary);
+  margin-bottom: 16px;
+  border-radius: 8px;
+}
+
+.selected-users {
+  margin-bottom: 16px;
+}
+
+.selected-users-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--beunreal-text);
+  margin-bottom: 8px;
+  display: block;
+}
+
+.selected-users-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.selected-user-chip {
+  background-color: var(--beunreal-background);
+  border-radius: 16px;
+  padding: 4px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--beunreal-text);
+}
+
+.selected-user-chip ion-icon {
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.create-group-button {
+  margin-top: 8px;
+  height: 40px;
+}

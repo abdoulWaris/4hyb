@@ -1,0 +1,7 @@
+{
+  "name": "beunreal",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "react-vite"
+}
