@@ -8,5 +8,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface UserRepo extends JpaRepository<Users, Integer> {
     List<Users> findAllByStatus(Status status);
 
-    Users findByNickname(String nickname);
+    Users findByNickName(String nickName);
 }

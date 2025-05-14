@@ -5,5 +5,6 @@ public enum Status {
     JOIN,
     MESSAGE,
     ONLINE,
-    OFFLINE
+    OFFLINE,
+    DELETE,
 }
