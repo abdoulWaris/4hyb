@@ -1,5 +1,6 @@
 import { Preferences } from "@capacitor/preferences";
-
+import { createUserWithEmailAndPassword, updateProfile, signInWithEmailAndPassword,signOut } from "firebase/auth";
+import { auth } from "../config/firebase";
 // Keys for auth storage
 const AUTH_TOKEN_KEY = "auth_token";
 const USER_DATA_KEY = "user_data";
@@ -25,44 +26,32 @@ export interface User {
  */
 export const register = async (email: string, username: string, password: string): Promise<User> => {
   try {
-    // This is a mock implementation since we don't have a backend yet
-    // In a real app, this would call an API endpoint
+    // Crée l'utilisateur Firebase
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
 
-    // Check if user already exists
-    const existingUsers = await getUsers();
-    const userExists = existingUsers.some((user) => user.email === email || user.username === username);
+    // Ajoute le displayName dans le profil Firebase
+    await updateProfile(userCredential.user, {
+      displayName: username,
+    });
 
-    if (userExists) {
-      throw new Error("User already exists");
-    }
-
-    // Create new user
+    // Création de l’objet User personnalisé
     const timestamp = new Date().getTime();
     const newUser: User = {
-      id: `user_${timestamp}`,
-      email,
-      username,
-      profilePicture: undefined,
-      fullName: undefined,
-      bio: undefined,
+      id: userCredential.user.uid,
+      email: email,
+      username: username,
+      createdAt: timestamp,
       following: [],
       followers: [],
-      createdAt: timestamp,
     };
 
-    // Save user to "database"
-    await saveUser(newUser);
-
-    // Generate token (in a real app, this would be from the server)
-    const token = `token_${timestamp}`;
-    await saveAuthToken(token);
-
-    // Save current user
+    // Sauvegarde du user localement
     await saveCurrentUser(newUser);
+    await saveAuthToken(await userCredential.user.getIdToken());
 
     return newUser;
   } catch (error) {
-    console.error("Error registering user:", error);
+    console.error("Firebase register error:", error);
     throw error;
   }
 };
@@ -75,30 +64,26 @@ export const register = async (email: string, username: string, password: string
  */
 export const login = async (emailOrUsername: string, password: string): Promise<User> => {
   try {
-    // This is a mock implementation since we don't have a backend yet
-    // In a real app, this would call an API endpoint
+    // On suppose ici que c’est un email. (Si tu veux login par username, il faut une table Firestore pour faire le lien.)
+    const userCredential = await signInWithEmailAndPassword(auth, emailOrUsername, password);
 
-    // Find user
-    const users = await getUsers();
-    const user = users.find((user) => user.email === emailOrUsername || user.username === emailOrUsername);
+    const firebaseUser = userCredential.user;
 
-    if (!user) {
-      throw new Error("User not found");
-    }
+    const user: User = {
+      id: firebaseUser.uid,
+      email: firebaseUser.email || "",
+      username: firebaseUser.displayName || "",
+      createdAt: new Date().getTime(), // ou stocker ailleurs ?
+      following: [],
+      followers: [],
+    };
 
-    // In a real app, we would check the password here
-    // For now, we just simulate a successful login
-
-    // Generate token (in a real app, this would be from the server)
-    const token = `token_${new Date().getTime()}`;
-    await saveAuthToken(token);
-
-    // Save current user
     await saveCurrentUser(user);
+    await saveAuthToken(await firebaseUser.getIdToken());
 
     return user;
   } catch (error) {
-    console.error("Error logging in:", error);
+    console.error("Firebase login error:", error);
     throw error;
   }
 };
@@ -107,14 +92,11 @@ export const login = async (emailOrUsername: string, password: string): Promise<
  * Logout the current user
  */
 export const logout = async (): Promise<void> => {
-  try {
-    await Preferences.remove({ key: AUTH_TOKEN_KEY });
-    await Preferences.remove({ key: USER_DATA_KEY });
-  } catch (error) {
-    console.error("Error logging out:", error);
-    throw error;
-  }
+  await signOut(auth);
+  await Preferences.remove({ key: AUTH_TOKEN_KEY });
+  await Preferences.remove({ key: USER_DATA_KEY });
 };
+
 
 /**
  * Check if a user is authenticated
