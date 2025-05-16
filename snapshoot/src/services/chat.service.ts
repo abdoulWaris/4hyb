@@ -1,6 +1,22 @@
-import { db } from "../config/firebase";
-import { ref, set, get, update, onValue, off } from "firebase/database";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  serverTimestamp,
+    writeBatch,
+  DocumentData,
+  QuerySnapshot,
+  Unsubscribe,
+} from "firebase/firestore";
 import { getCurrentUser, getUserById, getUsersByIds } from "./auth.service";
+import { getFirestore } from "firebase/firestore";
 
 // --- Types ---
 export interface Conversation {
@@ -40,57 +56,63 @@ export interface MessageWithUser extends Message {
   };
 }
 
+// --- Helpers ---
+const db = getFirestore();
+
 // --- Conversations ---
 
 export const getConversations = async (): Promise<ConversationWithUsers[]> => {
   const currentUser = await getCurrentUser();
   if (!currentUser) throw new Error("User not authenticated");
 
-  const snapshot = await get(ref(db, "conversations"));
-  const data = snapshot.val();
-  if (!data) return [];
-
-  const conversations: Conversation[] = Object.values(data);
-  const userConversations = conversations.filter((c) =>
-    c.participants.includes(currentUser.id)
+  // On récupère toutes les conversations où participe l'utilisateur
+  const conversationsCol = collection(db, "conversations");
+  const q = query(
+    conversationsCol,
+    where("participants", "array-contains", currentUser.id),
+    orderBy("updatedAt", "desc")
   );
-  userConversations.sort((a, b) => b.updatedAt - a.updatedAt);
+  const snapshot = await getDocs(q);
 
+  const conversations = snapshot.docs.map((doc) => doc.data() as Conversation);
+
+  // Pour chaque conversation, récupérer les users (autres participants)
   return await Promise.all(
-  userConversations.map(async (conv) => {
-    const otherUserIds = conv.participants.filter(id => id !== currentUser.id);
-
-    // Self-conversation
-    if (otherUserIds.length === 0) {
-      const user = await getUserById(currentUser.id);
-      if (!user) {
-        return { ...conv, users: [] };
+    conversations.map(async (conv) => {
+      if (conv.isGroup) {
+        const otherUserIds = conv.participants.filter((id) => id !== currentUser.id);
+        const otherUsers = await getUsersByIds(otherUserIds);
+        return {
+          ...conv,
+          users: otherUsers.map((u) => ({
+            id: u.id,
+            username: u.username,
+            profilePicture: u.profilePicture,
+          })),
+        };
+      } else {
+        // 1-to-1 conversation
+        const otherUserId = conv.participants.find((id) => id !== currentUser.id);
+        if (!otherUserId) {
+          // Conversation solo (to self)
+          const user = await getUserById(currentUser.id);
+          return {
+            ...conv,
+            users: user
+              ? [{ id: user.id, username: user.username, profilePicture: user.profilePicture }]
+              : [],
+          };
+        }
+        const user = await getUserById(otherUserId);
+        return {
+          ...conv,
+          users: user
+            ? [{ id: user.id, username: user.username, profilePicture: user.profilePicture }]
+            : [],
+        };
       }
-      return {
-        ...conv,
-        users: [{
-          id: user.id,
-          username: user.username,
-          profilePicture: user.profilePicture,
-        }],
-      };
-    }
-
-    // Regular 1-to-1 conversation
-    const user = await getUserById(otherUserIds[0]);
-    if (!user) {
-      return { ...conv, users: [] };
-    }
-    return {
-      ...conv,
-      users: [{
-        id: user.id,
-        username: user.username,
-        profilePicture: user.profilePicture,
-      }],
-    };
-  })
-);
+    })
+  );
 };
 
 export const getConversationById = async (
@@ -99,17 +121,15 @@ export const getConversationById = async (
   const currentUser = await getCurrentUser();
   if (!currentUser) throw new Error("User not authenticated");
 
-  const snapshot = await get(ref(db, `conversations/${conversationId}`));
+  const convRef = doc(db, "conversations", conversationId);
+  const snapshot = await getDoc(convRef);
   if (!snapshot.exists()) return null;
 
-  const conv: Conversation = snapshot.val();
-  if (!conv.participants.includes(currentUser.id))
-    throw new Error("Unauthorized");
+  const conv = snapshot.data() as Conversation;
+  if (!conv.participants.includes(currentUser.id)) throw new Error("Unauthorized");
 
   if (conv.isGroup) {
-    const otherUserIds = conv.participants.filter(
-      (id) => id !== currentUser.id
-    );
+    const otherUserIds = conv.participants.filter((id) => id !== currentUser.id);
     const otherUsers = await getUsersByIds(otherUserIds);
     return {
       ...conv,
@@ -120,19 +140,19 @@ export const getConversationById = async (
       })),
     };
   } else {
-    const otherUserId = conv.participants.find((id) => id !== currentUser.id)!;
+    const otherUserId = conv.participants.find((id) => id !== currentUser.id);
+    if (!otherUserId) {
+      // self conversation
+      const user = await getUserById(currentUser.id);
+      return {
+        ...conv,
+        users: user ? [{ id: user.id, username: user.username, profilePicture: user.profilePicture }] : [],
+      };
+    }
     const user = await getUserById(otherUserId);
     return {
       ...conv,
-      users: user
-        ? [
-            {
-              id: user.id,
-              username: user.username,
-              profilePicture: user.profilePicture,
-            },
-          ]
-        : [],
+      users: user ? [{ id: user.id, username: user.username, profilePicture: user.profilePicture }] : [],
     };
   }
 };
@@ -143,20 +163,24 @@ export const getOrCreateConversation = async (
   const currentUser = await getCurrentUser();
   if (!currentUser) throw new Error("User not authenticated");
 
-  const snapshot = await get(ref(db, "conversations"));
-  const all: Record<string, Conversation> = snapshot.val() || {};
-  const existing = Object.values(all).find(
-    (c) =>
-      !c.isGroup &&
-      c.participants.includes(userId) &&
-      c.participants.includes(currentUser.id)
+  const conversationsCol = collection(db, "conversations");
+  const q = query(
+    conversationsCol,
+    where("isGroup", "==", false),
+    where("participants", "array-contains", currentUser.id)
+  );
+  const snapshot = await getDocs(q);
+  const allConvs = snapshot.docs.map((doc) => doc.data() as Conversation);
+
+  // Recherche conversation existante avec userId
+  const existing = allConvs.find(
+    (c) => c.participants.includes(userId) && c.participants.length === 2
   );
 
-  if (existing)
-    return getConversationById(existing.id) as Promise<ConversationWithUsers>;
+  if (existing) return getConversationById(existing.id) as Promise<ConversationWithUsers>;
 
   const timestamp = Date.now();
-  const newConversation: Conversation = {
+  const newConv: Conversation = {
     id: `conv_${timestamp}`,
     participants: [currentUser.id, userId],
     createdAt: timestamp,
@@ -164,10 +188,10 @@ export const getOrCreateConversation = async (
     isGroup: false,
   };
 
-  await set(ref(db, `conversations/${newConversation.id}`), newConversation);
-  return getConversationById(
-    newConversation.id
-  ) as Promise<ConversationWithUsers>;
+  const convRef = doc(db, "conversations", newConv.id);
+  await setDoc(convRef, newConv);
+
+  return getConversationById(newConv.id) as Promise<ConversationWithUsers>;
 };
 
 export const createGroupConversation = async (
@@ -179,7 +203,8 @@ export const createGroupConversation = async (
   if (!currentUser) throw new Error("User not authenticated");
 
   const timestamp = Date.now();
-  const allIds = [...new Set([...userIds, currentUser.id])];
+  const allIds = Array.from(new Set([...userIds, currentUser.id]));
+
   const newConv: Conversation = {
     id: `conv_${timestamp}`,
     participants: allIds,
@@ -190,7 +215,9 @@ export const createGroupConversation = async (
     groupAvatar,
   };
 
-  await set(ref(db, `conversations/${newConv.id}`), newConv);
+  const convRef = doc(db, "conversations", newConv.id);
+  await setDoc(convRef, newConv);
+
   return getConversationById(newConv.id) as Promise<ConversationWithUsers>;
 };
 
@@ -207,20 +234,26 @@ export const sendMessage = async (
   const timestamp = Date.now();
   const messageId = `msg_${timestamp}`;
 
-  const message: Message = {
+  const message: any = {
     id: messageId,
     conversationId,
     senderId: currentUser.id,
     content,
-    imageUrl,
     createdAt: timestamp,
     isRead: false,
   };
 
-  await set(ref(db, `messages/${conversationId}/${messageId}`), message);
-  await update(ref(db, `conversations/${conversationId}`), {
+  if (imageUrl !== undefined) {
+    message.imageUrl = imageUrl;
+  }
+
+  const messageRef = doc(db, "conversations", conversationId, "messages", messageId);
+  await setDoc(messageRef, message);
+
+  const convRef = doc(db, "conversations", conversationId);
+  await updateDoc(convRef, {
     lastMessage: message,
-    updatedAt: timestamp,
+    updatedAt: serverTimestamp(),
   });
 
   return {
@@ -233,72 +266,82 @@ export const sendMessage = async (
   };
 };
 
-export const getMessages = async (
-  conversationId: string
-): Promise<MessageWithUser[]> => {
+
+export const getMessages = async (conversationId: string): Promise<MessageWithUser[]> => {
   const currentUser = await getCurrentUser();
   if (!currentUser) throw new Error("User not authenticated");
 
-  const snapshot = await get(ref(db, `messages/${conversationId}`));
-  const rawMessages: Message[] = snapshot.exists()
-    ? Object.values(snapshot.val())
-    : [];
+  const messagesRef = collection(db, "conversations", conversationId, "messages");
 
-  rawMessages.sort((a, b) => a.createdAt - b.createdAt);
+  const q = query(messagesRef, orderBy("createdAt", "asc"));
+  const snapshot = await getDocs(q);
 
+  // Récupérer les données + id de chaque document
+  const rawMessages = snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+  })) as Message[];
+
+  // Récupérer les ids des utilisateurs
   const userIds = [...new Set(rawMessages.map((m) => m.senderId))];
   const users = await getUsersByIds(userIds);
 
   await markMessagesAsRead(conversationId);
 
+  // Retourner les messages enrichis avec l'objet sender
   return rawMessages.map((msg) => {
     const sender = users.find((u) => u.id === msg.senderId);
     return {
       ...msg,
-      sender: sender || {
-        id: msg.senderId,
-        username: "Unknown",
-      },
+      sender: sender || { id: msg.senderId, username: "Unknown" },
     };
   });
 };
 
-export const markMessagesAsRead = async (
-  conversationId: string
-): Promise<void> => {
+
+export const markMessagesAsRead = async (conversationId: string) => {
   const currentUser = await getCurrentUser();
   if (!currentUser) throw new Error("User not authenticated");
 
-  const snapshot = await get(ref(db, `messages/${conversationId}`));
-  const data = snapshot.val();
-  if (!data) return;
+  const messagesRef = collection(db, "conversations", conversationId, "messages");
+  
+  // Récupérer tous les messages non lus
+  const q = query(messagesRef, where("isRead", "==", false));
+  const snapshot = await getDocs(q);
 
-  const updates: Record<string, any> = {};
-  Object.entries(data).forEach(([msgId, msg]: any) => {
-    if (!msg.isRead && msg.senderId !== currentUser.id) {
-      updates[`${msgId}/isRead`] = true;
+  const batch = writeBatch(db);  // <-- ici la bonne façon de créer un batch
+
+  snapshot.docs.forEach((docSnap) => {
+    const msg = docSnap.data();
+    if (msg.senderId !== currentUser.id && !msg.isRead) {
+      batch.update(doc(db, "conversations", conversationId, "messages", docSnap.id), {
+        isRead: true,
+      });
     }
   });
 
-  if (Object.keys(updates).length) {
-    await update(ref(db, `messages/${conversationId}`), updates);
-  }
+  await batch.commit();
 };
 
 export const getUnreadMessagesCount = async (): Promise<number> => {
   const currentUser = await getCurrentUser();
   if (!currentUser) return 0;
 
-  const snapshot = await get(ref(db, "messages"));
-  const data = snapshot.val();
-  if (!data) return 0;
+  const conversationsCol = collection(db, "conversations");
+  const q = query(conversationsCol, where("participants", "array-contains", currentUser.id));
+  const snapshot = await getDocs(q);
 
   let count = 0;
-  Object.values(data).forEach((convMessages: any) => {
-    (Object.values(convMessages) as Message[]).forEach((msg: Message) => {
+  for (const convDoc of snapshot.docs) {
+    const convId = convDoc.id;
+    const messagesCol = collection(db, "conversations", convId, "messages");
+    const messagesSnapshot = await getDocs(messagesCol);
+
+    messagesSnapshot.docs.forEach((msgDoc) => {
+      const msg = msgDoc.data() as Message;
       if (!msg.isRead && msg.senderId !== currentUser.id) count++;
     });
-  });
+  }
 
   return count;
 };
@@ -306,23 +349,24 @@ export const getUnreadMessagesCount = async (): Promise<number> => {
 export const listenForNewMessages = (
   conversationId: string,
   callback: (message: MessageWithUser) => void
-): (() => void) => {
-  const messagesRef = ref(db, `messages/${conversationId}`);
-  const unsubscribe = onValue(messagesRef, (snapshot) => {
-    const data = snapshot.val();
-    if (!data) return;
+): Unsubscribe => {
+  const messagesCol = collection(db, "conversations", conversationId, "messages");
+  const q = query(messagesCol, orderBy("createdAt", "asc"));
 
-    const message: Message = data[Object.keys(data).pop()!];
-    if (message) {
-      callback({
-        ...message,
-        sender: {
-          id: message.senderId,
-          username: "Unknown",
-        },
-      });
-    }
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    snapshot.docChanges().forEach((change) => {
+      if (change.type === "added") {
+        const msg = change.doc.data() as Message;
+        callback({
+          ...msg,
+          sender: {
+            id: msg.senderId,
+            username: "Unknown", // tu peux améliorer en récupérant le user ici
+          },
+        });
+      }
+    });
   });
 
-  return () => off(messagesRef, "value", unsubscribe);
+  return unsubscribe;
 };

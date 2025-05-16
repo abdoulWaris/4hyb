@@ -50,17 +50,49 @@ const Conversation: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showActionSheet, setShowActionSheet] = useState<boolean>(false);
 
-  useEffect(() => {
-    loadConversation();
-    loadMessages();
+ useEffect(() => {
+  let isMounted = true;
 
-    // Poll for new messages every 5 seconds
-    const interval = setInterval(() => {
-      loadMessages(false);
-    }, 5000);
+  const loadConversationSafe = async () => {
+    try {
+      const conversationData = await getConversationById(id);
+      if (!conversationData) {
+        if (isMounted) setError("Conversation not found");
+        return;
+      }
+      if (isMounted) setConversation(conversationData);
+    } catch (error) {
+      console.error("Error loading conversation:", error);
+      if (isMounted) setError("Failed to load conversation");
+    }
+  };
 
-    return () => clearInterval(interval);
-  }, [id]);
+  const loadMessagesSafe = async (showLoader = true) => {
+    try {
+      if (showLoader && isMounted) setIsLoading(true);
+      const conversationMessages = await getMessages(id);
+      if (isMounted) setMessages(conversationMessages);
+    } catch (error) {
+      console.error("Error loading messages:", error);
+      if (isMounted) setError("Failed to load messages");
+    } finally {
+      if (showLoader && isMounted) setIsLoading(false);
+    }
+  };
+
+  loadConversationSafe();
+  loadMessagesSafe();
+
+  const interval = setInterval(() => {
+    loadMessagesSafe(false);
+  }, 5000);
+
+  return () => {
+    isMounted = false;
+    clearInterval(interval);
+  };
+}, [id]);
+
 
   useEffect(() => {
     // Scroll to bottom when messages change
@@ -90,7 +122,7 @@ const Conversation: React.FC = () => {
       }
 
       const conversationMessages = await getMessages(id);
-      setMessages(conversationMessages);
+      setMessages(conversationMessages); 
     } catch (error) {
       console.error("Error loading messages:", error);
       setError("Failed to load messages");
