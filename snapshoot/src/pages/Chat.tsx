@@ -56,12 +56,13 @@ const Chat: React.FC = () => {
       setIsLoading(true);
       const userConversations = await getConversations();
       setConversations(userConversations);
+      console.log("Conversations loaded:", conversations.length);
     } catch (error) {
       console.error("Error loading conversations:", error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }; 
 
   const handleRefresh = (event: CustomEvent<RefresherEventDetail>) => {
     loadConversations().then(() => {

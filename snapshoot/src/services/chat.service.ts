@@ -17,7 +17,7 @@ import {
 } from "firebase/firestore";
 import { getCurrentUser, getUserById, getUsersByIds } from "./auth.service";
 import { getFirestore } from "firebase/firestore";
-
+import { User } from "./auth.service";
 // --- Types ---
 export interface Conversation {
   id: string;
@@ -58,7 +58,9 @@ export interface MessageWithUser extends Message {
 
 // --- Helpers ---
 const db = getFirestore();
-
+// 🔧 Nettoie un objet en supprimant les champs `undefined`
+const removeUndefinedFields = (obj: any) =>
+  Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== undefined));
 // --- Conversations ---
 
 export const getConversations = async (): Promise<ConversationWithUsers[]> => {
@@ -115,6 +117,13 @@ export const getConversations = async (): Promise<ConversationWithUsers[]> => {
   );
 };
 
+
+const mapUser = (u: User) => ({
+  id: u.id,
+  username: u.username,
+  profilePicture: u.profilePicture,
+});
+
 export const getConversationById = async (
   conversationId: string
 ): Promise<ConversationWithUsers | null> => {
@@ -126,36 +135,36 @@ export const getConversationById = async (
   if (!snapshot.exists()) return null;
 
   const conv = snapshot.data() as Conversation;
-  if (!conv.participants.includes(currentUser.id)) throw new Error("Unauthorized");
 
+  if (!Array.isArray(conv.participants)) {
+    throw new Error("Invalid conversation format: participants missing");
+  }
+
+  if (!conv.participants.includes(currentUser.id)) {
+    throw new Error("Unauthorized: user not part of the conversation");
+  }
+
+  const otherUserIds = conv.participants.filter((id) => id !== currentUser.id);
+
+  // Groupe
   if (conv.isGroup) {
-    const otherUserIds = conv.participants.filter((id) => id !== currentUser.id);
     const otherUsers = await getUsersByIds(otherUserIds);
     return {
       ...conv,
-      users: otherUsers.map((u) => ({
-        id: u.id,
-        username: u.username,
-        profilePicture: u.profilePicture,
-      })),
-    };
-  } else {
-    const otherUserId = conv.participants.find((id) => id !== currentUser.id);
-    if (!otherUserId) {
-      // self conversation
-      const user = await getUserById(currentUser.id);
-      return {
-        ...conv,
-        users: user ? [{ id: user.id, username: user.username, profilePicture: user.profilePicture }] : [],
-      };
-    }
-    const user = await getUserById(otherUserId);
-    return {
-      ...conv,
-      users: user ? [{ id: user.id, username: user.username, profilePicture: user.profilePicture }] : [],
+      users: otherUsers.map(mapUser),
     };
   }
+
+  // Privée (2 personnes) ou conversation avec soi-même
+  const otherUserId = otherUserIds[0] || currentUser.id;
+  const user = await getUserById(otherUserId);
+
+  return {
+    ...conv,
+    users: user ? [mapUser(user)] : [],
+  };
 };
+
 
 export const getOrCreateConversation = async (
   userId: string
@@ -205,6 +214,7 @@ export const createGroupConversation = async (
   const timestamp = Date.now();
   const allIds = Array.from(new Set([...userIds, currentUser.id]));
 
+  // Créer un objet sans les undefined
   const newConv: Conversation = {
     id: `conv_${timestamp}`,
     participants: allIds,
@@ -212,14 +222,19 @@ export const createGroupConversation = async (
     updatedAt: timestamp,
     isGroup: true,
     groupName,
-    groupAvatar,
+    groupAvatar, // sera supprimé s'il est undefined
   };
 
+  // Fonction pour nettoyer les undefined
+  const removeUndefined = (obj: Record<string, any>) =>
+    Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== undefined));
+
   const convRef = doc(db, "conversations", newConv.id);
-  await setDoc(convRef, newConv);
+  await setDoc(convRef, removeUndefined(newConv));
 
   return getConversationById(newConv.id) as Promise<ConversationWithUsers>;
 };
+
 
 // --- Messages ---
 

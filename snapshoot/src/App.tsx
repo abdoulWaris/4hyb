@@ -121,12 +121,8 @@ const App: React.FC = () => {
               <IonTabBar slot="bottom" className="app-tab-bar">
                 <IonTabButton tab="home" href="/app/home">
                   <IonIcon aria-hidden="true" icon={people} />
-                  <IonLabel>Feed</IonLabel>
-                </IonTabButton>
-                <IonTabButton tab="search" href="/app/search">
-                  <IonIcon aria-hidden="true" icon={search} />
-                  <IonLabel>Search</IonLabel>
-                </IonTabButton>
+                  <IonLabel>Acceuil</IonLabel>
+                </IonTabButton>                
                 <IonTabButton tab="capture" href="/app/home" className="capture-tab">
                   <div className="capture-button-wrapper">
                     <IonIcon aria-hidden="true" icon={camera} className="capture-icon" />

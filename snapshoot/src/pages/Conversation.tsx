@@ -18,7 +18,7 @@ import {
   IonAlert,
   useIonRouter,
 } from "@ionic/react";
-import { camera, send, image, informationCircleOutline, ellipsisVertical, chevronBack, arrowUp } from "ionicons/icons";
+import { camera, send, image, informationCircleOutline, ellipsisVertical, chevronBack, arrowUp, imageOutline } from "ionicons/icons";
 import { useParams } from "react-router";
 import { useAuthContext } from "../contexts/AuthContext";
 import {
@@ -31,6 +31,7 @@ import {
 import { takePicture } from "../services/camera.service";
 import { CameraResultType, CameraSource } from "@capacitor/camera";
 import "./Conversation.css";
+import { h } from "ionicons/dist/types/stencil-public-runtime";
 
 interface RouteParams {
   id: string;
@@ -232,33 +233,39 @@ const Conversation: React.FC = () => {
   };
 
   const formatDate = (timestamp: number) => {
-    const date = new Date(timestamp);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
+  const date = new Date(timestamp);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
 
-    if (
-      date.getDate() === today.getDate() &&
-      date.getMonth() === today.getMonth() &&
-      date.getFullYear() === today.getFullYear()
-    ) {
-      return "Today";
-    }
+  if (
+    date.getDate() === today.getDate() &&
+    date.getMonth() === today.getMonth() &&
+    date.getFullYear() === today.getFullYear()
+  ) {
+    return "Today";
+  }
 
-    if (
-      date.getDate() === yesterday.getDate() &&
-      date.getMonth() === yesterday.getMonth() &&
-      date.getFullYear() === yesterday.getFullYear()
-    ) {
-      return "Yesterday";
-    }
+  if (
+    date.getDate() === yesterday.getDate() &&
+    date.getMonth() === yesterday.getMonth() &&
+    date.getFullYear() === yesterday.getFullYear()
+  ) {
+    return "Yesterday";
+  }
 
-    return date.toLocaleDateString([], {
-      month: "short",
-      day: "numeric",
-      year: today.getFullYear() !== date.getFullYear() ? "numeric" : undefined,
-    });
+  // Si l'année est différente, on affiche l'année aussi, sinon on ne l'affiche pas.
+  const options: Intl.DateTimeFormatOptions = {
+    month: "short",
+    day: "numeric",
   };
+  if (date.getFullYear() !== today.getFullYear()) {
+    options.year = "numeric";
+  }
+
+  return date.toLocaleDateString(undefined, options);
+};
+
 
   const groupMessagesByDate = (messages: MessageWithUser[]) => {
     const groups: { [date: string]: MessageWithUser[] } = {};
@@ -451,7 +458,7 @@ const Conversation: React.FC = () => {
             <IonTextarea
               value={messageText}
               onIonChange={(e) => setMessageText(e.detail.value!)}
-              placeholder="Message"
+              placeholder="Dites Bonjour John Doe! 👋"
               autoGrow
               rows={1}
               className="message-textarea"
@@ -460,6 +467,15 @@ const Conversation: React.FC = () => {
           </div>
 
           <div className="actions-container">
+
+            <IonButton 
+                fill="clear" 
+                className="media-button"
+                onClick={() => handleTakePhoto()}
+              >
+                <IonIcon icon={imageOutline} />
+              </IonButton>
+
             <IonButton fill="clear" className="action-button" onClick={handleTakePhoto} disabled={isSending}>
               <IonIcon slot="icon-only" icon={camera} />
             </IonButton>
