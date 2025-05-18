@@ -122,6 +122,7 @@ export const isAuthenticated = async (): Promise<boolean> => {
  */
 export const getCurrentUser = async (): Promise<User | null> => {
   const result = await Preferences.get({ key: USER_DATA_KEY });
+  console.log("getCurrentUser", result.value);
   return result.value ? JSON.parse(result.value) : null;
 };
 

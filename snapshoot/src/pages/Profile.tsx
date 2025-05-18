@@ -223,15 +223,7 @@ const Profile: React.FC = () => {
     );
   };
 
-  const renderSavedPosts = () => {
-    return (
-      <div className="empty-state">
-        <IonIcon className="empty-state-icon" icon={lockClosed} />
-        <h2 className="empty-state-title">Saved Posts</h2>
-        <p className="empty-state-message">When you save posts, they'll appear here</p>
-      </div>
-    );
-  };
+  
 
   return (
     <IonPage className="profile-page">
@@ -265,12 +257,9 @@ const Profile: React.FC = () => {
             <IonSegmentButton value="posts">
               <IonIcon icon={grid} />
             </IonSegmentButton>
-            <IonSegmentButton value="saved">
-              <IonIcon icon={lockClosed} />
-            </IonSegmentButton>
           </IonSegment>
 
-          {selectedSegment === "posts" ? renderPosts() : renderSavedPosts()}
+          {selectedSegment === "posts" && renderPosts()}
         </div>
 
         {/* Action Sheet for profile options */}

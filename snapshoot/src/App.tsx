@@ -13,7 +13,16 @@ import {
 } from "@ionic/react";
 import { IonReactRouter } from "@ionic/react-router";
 import { Route, Redirect } from "react-router";
-import { camera, image, settings, chatbubble, search, people } from "ionicons/icons";
+import {
+  camera,
+  image,
+  settings,
+  chatbubble,
+  search,
+  people,
+  imagesOutline,
+  cameraOutline,
+} from "ionicons/icons";
 import { isAuthenticated } from "./services/auth.service";
 import { AuthProvider } from "./contexts/AuthContext";
 
@@ -87,7 +96,13 @@ const ProtectedRoute: React.FC<{
     <Route
       {...rest}
       render={(props) =>
-        isAuthed ? <Component {...props} /> : <Redirect to={{ pathname: "/login", state: { from: props.location } }} />
+        isAuthed ? (
+          <Component {...props} />
+        ) : (
+          <Redirect
+            to={{ pathname: "/login", state: { from: props.location } }}
+          />
+        )
       }
     />
   );
@@ -108,11 +123,31 @@ const App: React.FC = () => {
                 <ProtectedRoute path="/app/profile" component={Profile} exact />
                 <ProtectedRoute path="/app/search" component={Search} exact />
                 <ProtectedRoute path="/app/chat" component={Chat} exact />
-                <ProtectedRoute path="/app/settings" component={Settings} exact />
-                <ProtectedRoute path="/app/conversation/:id" component={Conversation} exact />
-                <ProtectedRoute path="/app/edit-profile" component={EditProfile} exact />
-                <ProtectedRoute path="/app/photo/:id" component={PhotoView} exact />
-                <ProtectedRoute path="/app/user/:id" component={UserProfile} exact />
+                <ProtectedRoute
+                  path="/app/settings"
+                  component={Settings}
+                  exact
+                />
+                <ProtectedRoute
+                  path="/app/conversation/:id"
+                  component={Conversation}
+                  exact
+                />
+                <ProtectedRoute
+                  path="/app/edit-profile"
+                  component={EditProfile}
+                  exact
+                />
+                <ProtectedRoute
+                  path="/app/photo/:id"
+                  component={PhotoView}
+                  exact
+                />
+                <ProtectedRoute
+                  path="/app/user/:id"
+                  component={UserProfile}
+                  exact
+                />
                 <Route exact path="/app">
                   <Redirect to="/app/home" />
                 </Route>
@@ -122,11 +157,14 @@ const App: React.FC = () => {
                 <IonTabButton tab="home" href="/app/home">
                   <IonIcon aria-hidden="true" icon={people} />
                   <IonLabel>Acceuil</IonLabel>
-                </IonTabButton>                
-                <IonTabButton tab="capture" href="/app/home" className="capture-tab">
-                  <div className="capture-button-wrapper">
-                    <IonIcon aria-hidden="true" icon={camera} className="capture-icon" />
-                  </div>
+                </IonTabButton>
+                <IonTabButton tab="gallery" href="/app/gallery">
+                  <IonIcon icon={imagesOutline} />
+                  <IonLabel>Galerie</IonLabel>
+                </IonTabButton>
+                <IonTabButton tab="camera" href="/app/camera">
+                  <IonIcon icon={cameraOutline} />
+                  <IonLabel>Caméra</IonLabel>
                 </IonTabButton>
                 <IonTabButton tab="chat" href="/app/chat">
                   <IonIcon aria-hidden="true" icon={chatbubble} />
